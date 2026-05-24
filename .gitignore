@@ -1,0 +1,15 @@
+# runs/ 目录由 PaperAgent 自动生成，不提交
+runs/*/venv/
+runs/*/data/
+runs/*/results/checkpoints/
+
+# 保留产物文件（可选提交）
+# runs/*/paper_analysis.json
+# runs/*/final_report.md
+# runs/*/results/metrics.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
