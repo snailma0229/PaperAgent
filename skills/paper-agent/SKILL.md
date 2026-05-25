@@ -38,8 +38,30 @@ description: "Multi-mode paper reproduction orchestrator. Supports 5 modes: free
 
 ## 初始化
 
-1. 根据输入和当前时间生成 `run_id`（格式：`YYYY-MM-DD-<name_slug>`）
-2. 创建 `runs/<run_id>/` 目录结构
+### run_id 生成规则
+
+run_id 格式：**`YYYY-MM-DD-<mode>-<name_slug>`**
+
+```
+模式 1 free：        2026-05-25-free-tiger-generative-retrieval
+模式 2 offline：     2026-05-25-offline-tiger-generative-retrieval
+模式 3 pdf-offline： 2026-05-25-pdf-offline-tiger-generative-retrieval
+模式 4 blacklist：   2026-05-25-blacklist-tiger-generative-retrieval
+模式 5 library：     2026-05-25-library-tiger-generative-retrieval
+```
+
+`<name_slug>` 规则：
+- 论文名/模型名转小写，空格和特殊字符替换为 `-`，并排除连续的 `-`
+- arXiv ID（如 `2305.05065`）直接用 arxiv-id：`2026-05-25-free-arxiv-2305-05065`
+- PDF 路径（如 `papers/gru4rec.pdf`）取文件名：`2026-05-25-pdf-offline-gru4rec`
+- 若用户通过 `— run_id:` 手动指定，直接使用用户指定的字符串
+
+**run_id 必须在初始化阶段第一步就确定，不得在后续 skill（如 paper-scout）执行后再修改。**
+
+### 初始化步骤
+
+1. 解析所有参数，**即刻**生成 `run_id`
+2. 创建 `runs/<run_id>/` 目录
 3. 写入 `runs/<run_id>/input.json`：
 
 ```json
@@ -61,6 +83,8 @@ description: "Multi-mode paper reproduction orchestrator. Supports 5 modes: free
 ```
 
 4. 写入 `runs/<run_id>/status.json`（初始 phase: `"init"`）
+
+> **关键约束**：run_id 一旦在初始化时确定，后续任何 skill 均不得修改。paper-scout 等 skill 即使找到了更精确的论文名，也只在 `paper_analysis.json` 中记录，不改变 run_id。
 
 ---
 

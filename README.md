@@ -164,10 +164,10 @@ paperswithcode.com
 
 ## 产物结构
 
-每次复现结果在 `runs/<run_id>/` 下：
+每次复现结果在 `runs/<run_id>/` 下，run_id 格式为 `YYYY-MM-DD-<mode>-<name_slug>`（如 `2026-05-25-free-tiger-generative-retrieval`）：
 
 ```
-runs/YYYY-MM-DD-<name>/
+runs/2026-05-25-free-tiger-generative-retrieval/
 ├── input.json              # 模式参数（含 target_datasets、official_lib）
 ├── status.json             # 当前阶段
 ├── sources_manifest.json   # 使用的材料来源（模式1/4）
