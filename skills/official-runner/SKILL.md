@@ -43,22 +43,112 @@ git clone --depth=1 "<official_lib>" runs/<run_id>/official_repo
 
 **若是本地路径**：直接使用，无需下载。
 
-### Step 2 — 分析官方库结构
+### Step 2 — 分析官方库数据加载格式
 
-扫描官方库，找到：
-- 主要训练入口（`main.py` / `run.py` / `train.py`）
-- 配置文件（`.yaml` / `.json` / argparse）
-- 数据加载逻辑（了解其期望的数据格式）
+扫描官方库的数据加载文件（通常是 `dataset.py` / `data_utils.py` / `dataloader.py`），精确理解其期望的输入格式：
 
-重点检查官方库的数据格式是否与 `data_report.json` 中已处理的数据格式兼容：
+**需要确认的关键信息**：
 
-| 检查项 | 自有预处理输出 | 官方库期望格式 | 是否兼容 |
-|--------|------------|------------|--------|
-| 数据文件格式 | `train.txt`: `user item1 item2` | `inter.csv`: `user:token item:token` | 需转换 |
-| ID 映射起点 | 从 1（0=padding） | 从 0 或从 1 | 确认 |
-| 数据集名称 | Amazon-Beauty | ml-1m | 无关 |
+| 检查项 | 自有预处理输出（标准格式）| 官方库期望格式 | 是否需要转换 |
+|--------|----------------------|------------|------------|
+| 文件格式 | `train.txt`: `uid item1 item2 ...` | `inter.csv`: `user_id\titem_id\ttimestamp` | 可能需要 |
+| ID 起点 | 从 1（0=padding）| 从 0 或从 1 | 需确认 |
+| 划分方式 | `train/valid/test.txt` 分开存储 | 单文件 + 按 split 列区分 | 可能需要合并 |
+| 序列格式 | 每行：用户完整历史序列 | 每行：一条交互记录 | 可能需要展开 |
 
-### Step 3 — 准备官方库运行环境
+### Step 3 — 数据格式适配（⚠️ 必须保证 split 一致）
+
+**核心约束：绝对不能重新划分 train/valid/test。**
+
+所有格式转换必须从已有的 `train.txt` / `valid.txt` / `test.txt` 出发，只改变**数据格式**，不改变**数据内容和划分**。转换脚本保存为 `runs/<run_id>/official_data/<dataset_name>/data_adapter.py`。
+
+```python
+# data_adapter.py
+import json
+from pathlib import Path
+
+# Step A：读取自有预处理结果（ground truth，不可更改）
+data_dir = Path(f"runs/{run_id}/data/{dataset_name}/processed")
+train_seqs  = {}  # {uid: [item1, item2, ...]}  训练历史序列
+valid_items = {}  # {uid: item}                  验证集 ground truth
+test_items  = {}  # {uid: item}                  测试集 ground truth
+
+with open(data_dir / "train.txt") as f:
+    for line in f:
+        parts = line.strip().split()
+        uid, items = int(parts[0]), list(map(int, parts[1:]))
+        train_seqs[uid] = items
+
+with open(data_dir / "valid.txt") as f:
+    for line in f:
+        uid, item = map(int, line.strip().split())
+        valid_items[uid] = item
+
+with open(data_dir / "test.txt") as f:
+    for line in f:
+        uid, item = map(int, line.strip().split())
+        test_items[uid] = item
+
+out_dir = Path(f"runs/{run_id}/official_data/{dataset_name}")
+out_dir.mkdir(parents=True, exist_ok=True)
+
+# Step B：根据官方库格式输出（三选一，根据实际情况选择）
+
+# --- 格式 A：每行一条交互 + split 列（RecBole 风格）---
+with open(out_dir / f"{dataset_name}.inter", "w") as f:
+    f.write("user_id:token\titem_id:token\tsplit:token\n")
+    for uid, items in train_seqs.items():
+        for item in items:
+            f.write(f"{uid}\t{item}\ttrain\n")
+        if uid in valid_items:
+            f.write(f"{uid}\t{valid_items[uid]}\tvalid\n")
+        if uid in test_items:
+            f.write(f"{uid}\t{test_items[uid]}\ttest\n")
+
+# --- 格式 B：与自有格式相同，直接 symlink（零成本）---
+# import os; os.symlink(data_dir.resolve(), out_dir / "processed")
+
+# --- 格式 C：(user, item, label) 三元组（部分官方库）---
+# with open(out_dir / "train.tsv", "w") as f:
+#     for uid, items in train_seqs.items():
+#         for item in items:
+#             f.write(f"{uid}\t{item}\t1\n")
+```
+
+**Step C：适配验证（必须通过才能继续）**
+
+```python
+# 验证转换后的数据总量与原数据一致
+original_total = (
+    sum(len(v) for v in train_seqs.values())
+    + len(valid_items) + len(test_items)
+)
+# 统计转换后的交互总数（不含 header）
+with open(out_dir / f"{dataset_name}.inter") as f:
+    converted_total = sum(1 for _ in f) - 1  # 减去 header
+
+assert original_total == converted_total, \
+    f"❌ 数据转换后总量不一致：原始 {original_total} != 转换后 {converted_total}"
+
+adapter_report = {
+    "source_data": str(data_dir),
+    "output_data": str(out_dir),
+    "format_type": "RecBole-inter",
+    "split_preserved": True,
+    "train_users": len(train_seqs),
+    "valid_users": len(valid_items),
+    "test_users": len(test_items),
+    "total_interactions_original": original_total,
+    "total_interactions_converted": converted_total,
+    "verification_passed": True
+}
+json.dump(adapter_report, open(out_dir / "adapter_report.json", "w"), indent=2)
+print(f"✅ 数据适配完成：train={len(train_seqs)} users, valid/test 各 {len(valid_items)} users，总交互 {original_total} 条")
+```
+
+若验证失败：**立即停止**，记录 `status: "data_mismatch"`，不继续运行官方库。
+
+### Step 4 — 准备官方库运行环境
 
 ```bash
 cd runs/<run_id>/official_repo
@@ -71,7 +161,7 @@ conda create -n paper-agent-official-<run_id8> python=<python_version> -y
 conda run -n paper-agent-official-<run_id8> pip install -r requirements.txt 2>&1 | tail -5
 ```
 
-### Step 4 — 配置超参（精确对齐论文超参）
+### Step 5 — 配置超参（精确对齐论文超参）
 
 从 `paper_analysis.training_config` 读取超参，传给官方库。**不调整任何超参**——目的是得到官方库在相同超参下的结果，而非最优超参。
 
@@ -87,7 +177,7 @@ python run_recbole.py \
 
 官方库的超参配置文件 `official_config.yaml` 根据 `paper_analysis.training_config` 生成，格式匹配官方库。
 
-### Step 5 — 运行实验
+### Step 6 — 运行实验
 
 ```bash
 conda run -n paper-agent-official-<run_id8> python <main_entry> [config_args] 2>&1 | tee runs/<run_id>/official_run.log
@@ -97,13 +187,13 @@ conda run -n paper-agent-official-<run_id8> python <main_entry> [config_args] 2>
 
 监控日志，提取最佳 epoch 的验证集/测试集指标（或官方库直接输出的 best results）。
 
-### Step 6 — 提取结果
+### Step 7 — 提取结果
 
 从 `official_run.log` 或官方库输出的结果文件中提取指标。
 
 若官方库有多个 epoch 的结果，取 best epoch（按 `paper_analysis.training_config.early_stopping.metric` 选最佳验证集指标对应的测试集结果）。
 
-### Step 7 — 写入 official_metrics.json
+### Step 8 — 写入 official_metrics.json
 
 ```json
 {
@@ -112,9 +202,13 @@ conda run -n paper-agent-official-<run_id8> python <main_entry> [config_args] 2>
   "official_lib": "https://github.com/...",
   "official_conda_env": "paper-agent-official-<run_id8>",
   "data_compatibility": {
-    "data_reused": true,
-    "conversion_needed": false,
-    "conversion_note": null
+    "original_data": "runs/<run_id>/data/<dataset>/processed/",
+    "converted_data": "runs/<run_id>/official_data/<dataset>/",
+    "format_type": "RecBole-inter | raw-symlink | triplet | none",
+    "conversion_needed": true,
+    "split_preserved": true,
+    "verification_passed": true,
+    "adapter_report": "runs/<run_id>/official_data/<dataset>/adapter_report.json"
   },
   "hyperparams_used": {
     "source": "paper_analysis.training_config",
@@ -146,7 +240,8 @@ conda run -n paper-agent-official-<run_id8> python <main_entry> [config_args] 2>
 
 ## Hard Rules
 
-- 数据集**必须复用** `data_report.json` 中已处理的数据，不重新下载
+- 数据格式转换**必须从已有 train/valid/test 文件出发**，只改格式不改内容，绝不重新划分
+- 转换后必须验证交互总数一致，验证失败立即停止（`status: "data_mismatch"`）
 - 超参**必须来自** `paper_analysis.training_config`，不使用官方库默认配置
-- 官方库运行在独立 venv 中，不污染自实现环境
+- 官方库运行在独立 conda 环境（`paper-agent-official-<run_id8>`）中，不污染自实现环境
 - 若官方库运行失败，**不阻塞** result-auditor，记录 `status: failed` 后继续
