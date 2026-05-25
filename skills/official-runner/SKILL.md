@@ -31,7 +31,64 @@ description: "Official library runner for Recommendation Systems. Installs and r
   ```
   不影响后续 result-auditor 运行。
 
-### Step 1 — 获取官方库
+### Step 0.5 — 检查官方库结果复用
+
+**在 clone 仓库和运行实验之前**，扫描 `runs/` 下已有 run，查找满足以下条件的官方库结果：
+
+1. `official_metrics.json` 存在且 `status == "success"`
+2. `official_lib` 与本次完全一致（URL 或绝对路径完全相同）
+3. 涉及的数据集名称与本次 `target_datasets` 有交集
+
+```python
+import json
+from pathlib import Path
+
+my_official_lib = input_json['official_lib']
+my_datasets = set(input_json.get('target_datasets') or
+                  [d['name'] for d in paper_analysis['datasets']])
+
+def find_reusable_official_result(official_lib: str, datasets: set) -> dict | None:
+    """返回可复用的 official_metrics，仅包含 datasets 中的指标。"""
+    for run_dir in sorted(Path('runs').iterdir(), reverse=True):
+        if str(run_dir).endswith(run_id):
+            continue
+        om_path = run_dir / 'official_metrics.json'
+        if not om_path.exists():
+            continue
+        om = json.loads(om_path.read_text())
+        if om.get('status') != 'success':
+            continue
+        if om.get('official_lib') != official_lib:
+            continue
+        # 检查数据集覆盖：本次需要的数据集是否在已有结果中都有指标
+        existing_datasets = set(om.get('datasets_evaluated', []))
+        if not datasets.issubset(existing_datasets):
+            continue
+        return om
+    return None
+
+reusable = find_reusable_official_result(my_official_lib, my_datasets)
+```
+
+**若找到可复用结果**：
+- 从已有 `official_metrics.json` 中提取本次需要的数据集指标
+- 写入本次的 `runs/<run_id>/official_metrics.json`，标注 `reused_from`：
+
+```json
+{
+  "status": "success",
+  "reused": true,
+  "reused_from": "runs/2026-05-24-tiger-generative-retrieval/official_metrics.json",
+  "official_lib": "https://github.com/...",
+  "datasets_evaluated": ["Amazon-Beauty"],
+  "metrics": { "Amazon-Beauty_HR@10": 0.0715, "Amazon-Beauty_NDCG@10": 0.0458 },
+  "reused_at": "ISO8601"
+}
+```
+
+- **跳过 Step 1-8**，直接进入 result-auditor。
+
+**若未找到**：继续 Step 1。
 
 **若是 GitHub 链接**（`knowledge_policy.allow_web` 须为 true，或 offline 模式下已在本地）：
 
@@ -198,9 +255,12 @@ conda run -n paper-agent-official-<run_id8> python <main_entry> [config_args] 2>
 ```json
 {
   "run_id": "...",
-  "status": "success | failed | skipped | timeout",
+  "status": "success | failed | skipped | timeout | data_mismatch",
+  "reused": false,
+  "reused_from": null,
   "official_lib": "https://github.com/...",
   "official_conda_env": "paper-agent-official-<run_id8>",
+  "datasets_evaluated": ["Amazon-Beauty", "Amazon-Sports"],
   "data_compatibility": {
     "original_data": "runs/<run_id>/data/<dataset>/processed/",
     "converted_data": "runs/<run_id>/official_data/<dataset>/",
