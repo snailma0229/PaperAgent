@@ -49,11 +49,11 @@ codex --dangerously-skip-permissions    # 或 claude --dangerously-skip-permissi
 ```
 /paper-agent "GRU4Rec" \
   — mode: offline \
-  — official-lib: "/local/repos/GRU4Rec" \
+  — official-lib: "https://github.com/hidasib/GRU4Rec" \
   — datasets: "Amazon-Beauty"
 ```
 
-完全使用 AI 已有知识推断实现方案，每个假设标注置信度。`official-lib` 可用本地路径（offline 模式下无法 clone 远程仓库）。
+完全使用 AI 已有知识推断实现方案，每个假设标注置信度。`official-lib` 支持 GitHub URL（clone 官方库和下载数据集性质相同，属于「下载已知资源」，所有模式均允许）。
 
 **Pipeline**：`design-architect → data-fetcher → code-implementer → env-setup → runner → official-runner → result-auditor`
 
@@ -64,11 +64,11 @@ codex --dangerously-skip-permissions    # 或 claude --dangerously-skip-permissi
 ```
 /paper-agent "papers/gru4rec.pdf" \
   — mode: pdf-offline \
-  — official-lib: "/local/repos/GRU4Rec" \
+  — official-lib: "https://github.com/hidasib/GRU4Rec" \
   — datasets: "Amazon-Beauty,MovieLens-1M"
 ```
 
-只使用给定 PDF 的内容，不联网补充信息。`official-lib` 同样可用本地路径。
+只使用给定 PDF 的内容，不联网搜索信息。`official-lib` 支持 GitHub URL（全流程仅允许数据集下载和 clone 官方库两种网络操作）。
 
 **Pipeline**：`paper-reader → design-architect → data-fetcher → code-implementer → env-setup → runner → official-runner → result-auditor`
 
@@ -116,9 +116,7 @@ paperswithcode.com
   — datasets: "Amazon-Beauty,MovieLens-1M"
 ```
 
-读取用户手写的领域经验 md 文件（已验证配置、已知踩坑、数据集经验），用领域先验辅助实现方案设计，不联网。
-
-**Pipeline**：`knowledge-builder → design-architect → data-fetcher → code-implementer → env-setup → runner → official-runner → result-auditor`
+读取用户手写的领域经验 md 文件（已验证配置、已知踩坑、数据集经验），用领域先验辅助实现方案设计，不联网。`official-lib` 同样支持 GitHub URL（clone 官方库属于"下载已知资源"，所有模式均允许）。
 
 `domain-knowledge.md` 示例片段：
 

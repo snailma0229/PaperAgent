@@ -19,7 +19,7 @@ description: "Multi-mode paper reproduction orchestrator. Supports 5 modes: free
 | **从已知 URL 下载数据集** | ✅ **始终允许** | ✅ 允许（blacklist 检查后）|
 | **访问 arXiv/HuggingFace 下载数据** | ✅ **始终允许** | ✅ 允许（blacklist 检查后）|
 
-> 简单理解：`allow_web: false` = 不能主动去「搜」，但可以「下载」已知地址的数据集。
+> 简单理解：`allow_web: false` = 不能主动去「搜」，但可以「下载」已知地址的资源（数据集、official-lib）。全流程中仅允许两种网络操作：**下载数据集**和 **clone 官方库**。
 
 ---
 

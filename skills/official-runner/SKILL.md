@@ -11,6 +11,8 @@ description: "Official library runner for Recommendation Systems. Installs and r
 - **`run_id`**：当前 run_id
 - **`official_lib`**：官方库 GitHub 链接或本地路径（从 `input.json` 读取，若为空则跳过本 skill）
 
+> **`git clone official-lib` 属于「下载已知资源」，在所有模式下始终允许**（与下载数据集性质相同）。offline/library 模式不禁止 clone，禁止的是主动搜索官方库地址的行为。
+
 读取：
 - `runs/<run_id>/input.json`（获取 `official_lib` 和数据集路径）
 - `runs/<run_id>/data_report.json`（数据集路径、预处理配置）
@@ -90,13 +92,13 @@ reusable = find_reusable_official_result(my_official_lib, my_datasets)
 
 **若未找到**：继续 Step 1。
 
-**若是 GitHub 链接**（`knowledge_policy.allow_web` 须为 true，或 offline 模式下已在本地）：
+**若是 GitHub 链接**：所有模式均允许 clone（属于「下载已知资源」，不是搜索）：
 
 ```bash
 git clone --depth=1 "<official_lib>" runs/<run_id>/official_repo
 ```
 
-若 `allow_web: false` 且 `official_lib` 是网络链接：记录 `status: "skipped"` 并退出，在 `official_metrics.json` 中注明原因。
+**blacklist 模式**：如果 `official_lib` 的域名在黑名单中，记录 `status: "blocked"` 后退出。
 
 **若是本地路径**：直接使用，无需下载。
 
