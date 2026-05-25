@@ -179,19 +179,21 @@ description: "Multi-mode paper reproduction orchestrator. Supports 5 modes: free
 适用于：有领域知识库（本地 PDFs + 代码），**完全禁止联网**
 
 ```
-[knowledge-builder] 消化本地库，构建 knowledge_base.json
+[knowledge-builder] 读取 domain-knowledge.md，构建 knowledge_base.json
      ↓
 [design-architect]  综合 knowledge_base + AI 已有知识（无联网）
      ↓
 [data-fetcher]
      ↓
-[code-implementer]  可参考 knowledge_base 中的代码模式
+[code-implementer]  可参考 knowledge_base 中的实现模式和配置经验
      ↓
 [env-setup]
      ↓
 [runner]
      ↓
-[result-auditor]
+[official-runner] 用官方库跑同一数据集（若提供 — official-lib）
+     ↓
+[result-auditor]  三方对比：自实现 vs 官方库 vs 论文
 ```
 
 **knowledge_policy**：`allow_web: false, library_path: "<path>"`
